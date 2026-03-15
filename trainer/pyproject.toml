@@ -1,0 +1,43 @@
+[project]
+name = "model"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "certifi==2026.1.4",
+    "cffi==2.0.0",
+    "charset-normalizer==3.4.4",
+    "cryptography==46.0.4",
+    "google-api-core==2.29.0",
+    "google-api-python-client==2.188.0",
+    "google-auth==2.48.0",
+    "google-auth-httplib2==0.3.0",
+    "googleapis-common-protos==1.72.0",
+    "httplib2==0.31.2",
+    "idna==3.11",
+    "joblib==1.5.3",
+    "numpy==2.4.2",
+    "onnx>=1.20.1",
+    "onnxruntime>=1.24.1",
+    "pandas==3.0.0",
+    "proto-plus==1.27.1",
+    "pyasn1==0.6.2",
+    "pyasn1-modules==0.4.2",
+    "pycparser==3.0",
+    "pyparsing==3.3.2",
+    "python-dateutil==2.9.0.post0",
+    "python-dotenv>=1.2.1",
+    "requests==2.32.5",
+    "rsa==4.9.1",
+    "scikit-learn==1.8.0",
+    "scipy==1.17.0",
+    "sentence-transformers>=5.2.2",
+    "six==1.17.0",
+    "skl2onnx>=1.20.0",
+    "threadpoolctl==3.6.0",
+    "transformers>=5.1.0",
+    "tzdata==2025.3",
+    "uritemplate==4.2.0",
+    "urllib3==2.6.3",
+]

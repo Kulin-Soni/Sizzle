@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+@font-face {
+    font-family: 'GoogleSansBold';
+    src: url('./fonts/Google_Sans_Bold.woff') format('woff');
+    font-weight: 600;
+    font-style: normal;
+}
+@font-face {
+    font-family: 'GoogleSansSemiBold';
+    src: url('./fonts/Google_Sans_SemiBold.woff') format('woff');
+    font-weight: 900;
+    font-style: normal;
+}
+
+@theme {
+  --font-google_bold: "GoogleSansBold";
+}
+@theme {
+  --font-google_semi: "GoogleSansSemiBold"
+}
+
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+
+:root {
+  --theme: rgb(255, 68, 0);
+  --theme2: #00FF00;
+  --md-sys-color-primary: var(--theme);
+  --md-sys-color-on-primary-container: var(--theme);
+}
+
+.switch {
+  --md-sys-color-surface-container-highest: rgb(0, 0, 0);
+  --md-switch-handle-color: rgb(255, 255, 255);
+  --md-sys-color-on-surface-variant: rgb(255, 255, 255);
+}
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  width: 288px;
+  height: 260px;
+  overflow: hidden;
+  display: block; /* Ensure they behave as blocks */
+}
+
+/* Ensure #root takes up the full space properly if it was flex before */
+#root {
+  display: flex;
+  flex-direction: column;
+}

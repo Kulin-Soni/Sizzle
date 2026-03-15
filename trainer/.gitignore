@@ -1,0 +1,28 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Environment variables
+.env
+
+# IDE Settings
+.vscode
+
+# Other files
+regressor.pkl
+regressor.json
+raw_data
+predicted_data
+labeled_data
+
+
+
+# Test file
+src/test.py

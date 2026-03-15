@@ -1,0 +1,39 @@
+{
+  "name":        "Skia: Comment Classifier",
+  "short_name":  "Skia",
+  "description": "Filter out unnecessary comments from youtube videos.",
+  "version":     "1.0.0",
+  "manifest_version": 3,
+  "icons": {
+    "16":  "./logo.png",
+    "32":  "./logo.png",
+    "48":  "./logo.png",
+    "128": "./logo.png"
+  },
+  "action": {
+    "default_popup": "./index.html",
+    "default_icon":  "./logo.png"
+  },
+  "permissions": [
+    "storage",
+    "scripting",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://huggingface.co/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type":           "module"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*"],
+      "js":      ["content.js"],
+      "run_at":   "document_idle"
+    }
+  ]
+}
