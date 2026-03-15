@@ -22,7 +22,8 @@ raw_data
 predicted_data
 labeled_data
 
-
-
 # Test file
 src/test.py
+
+# Dependency manager
+uv.lock
