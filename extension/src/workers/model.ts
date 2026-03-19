@@ -97,13 +97,12 @@ class Model {
     if (!this.model || !this.isDownloaded) {
       throw Error("Model not downloaded or initiated! Run the initiate command first.");
     }
-
     const { coef, intercept } = this.modelData;
     const output = await this.model(text, {
       pooling: "mean",
       normalize: true,
     });
-    const embedding = Array.from(output);
+    const embedding = Array.from(output.data);
     const score = embedding.reduce(
       (sum, val, i) => sum + val * coef[i],
       intercept,

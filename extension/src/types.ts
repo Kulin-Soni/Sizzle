@@ -14,6 +14,16 @@ export type ProgressData = {
   progress: number;
 };
 
+export type ClassificationData = {
+  text: string,
+  id: string
+}
+
+export type ClassificationResult = {
+  result: number,
+  id: string
+}
+
 export enum Actions {
   PROGRESS = "PROGRESS",
   START = "START",
@@ -34,6 +44,16 @@ export type Message =
       category: "SETUP";
       from: MsgSource;
       action: Exclude<Actions, Actions.PROGRESS>;
+    }
+  | {
+      category: "CLASSIFICATION",
+      from: "back",
+      result: ClassificationResult
+    }
+  | {
+      category: "CLASSIFICATION",
+      from: "front",
+      data: ClassificationData
     };
 
 export interface Cache {
