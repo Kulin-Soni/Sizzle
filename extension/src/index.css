@@ -52,7 +52,7 @@
 html, body, #root {
   margin: 0;
   padding: 0;
-  width: 288px;
+  width: 350px;
   height: 260px;
   overflow: hidden;
   display: block; /* Ensure they behave as blocks */
