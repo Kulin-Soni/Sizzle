@@ -137,6 +137,7 @@ async function addPageListener() {
   let previousObserver: MutationObserver | null = null;
   async function handleUrlChange() {
     previousObserver?.disconnect();
+    await chrome.runtime.sendMessage({category: "WAKE_UP_CALL", from: "front"} as Message);
     if (checkValidity()) {
       const currentObserver = await addCommentListener();
       if (currentObserver) previousObserver = currentObserver;

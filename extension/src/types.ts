@@ -33,8 +33,7 @@ export enum Actions {
 
 export type MsgSource = "back" | "front";
 
-export type Message =
-  | {
+export type SetupMessages = {
       category: "SETUP";
       from: MsgSource;
       action: Actions.PROGRESS;
@@ -45,7 +44,8 @@ export type Message =
       from: MsgSource;
       action: Exclude<Actions, Actions.PROGRESS>;
     }
-  | {
+
+export type ClassificationMessages = {
       category: "CLASSIFICATION",
       from: "back",
       result: ClassificationResult
@@ -54,7 +54,14 @@ export type Message =
       category: "CLASSIFICATION",
       from: "front",
       data: ClassificationData
-    };
+  }
+
+export type WakeMessage = {
+  category: "WAKE_UP_CALL",
+  from: "front"
+}
+
+export type Message = SetupMessages | ClassificationMessages | WakeMessage;
 
 export interface Cache {
   cache_source: string;
