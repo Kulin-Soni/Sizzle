@@ -18,7 +18,7 @@ dependencies = [
     "idna==3.11",
     "joblib==1.5.3",
     "numpy==2.4.2",
-    "onnx>=1.20.1",
+    "onnx>=1.22.0",
     "onnxruntime>=1.24.1",
     "pandas==3.0.0",
     "proto-plus==1.27.1",
