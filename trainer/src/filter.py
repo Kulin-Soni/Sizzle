@@ -1,13 +1,33 @@
-### The following filters were used in some cases to filter the incoming data.
-
 import pandas as pd
+from glob import glob
+import re
+import emoji # pip install emoji / uv add emoji
+import os
 
-def likes_threshold_filter(df: pd.DataFrame, threshold: float):
-  max_likes = df["Likes"].max()
-  filtered = df[ df["Likes"]>int(max_likes*threshold) ]
-  return filtered
+def main():
+    for file in glob("input/*.csv"):
+        try:
+            df = pd.read_csv(file)
+        except Exception:
+            os.remove(file)
+            continue
+        final = []
+        for _, row in df.iterrows():
+            comment = str(row["Comments"]).strip()
+            no_emoji = emoji.replace_emoji(comment, "")
+            if no_emoji == "":
+                continue
+            if len(no_emoji) < len(comment)*.5:
+                continue
+            if re.match(r'^https?:\/\/\S+$', no_emoji):
+                continue
+            if len(no_emoji) < 10:
+                continue
+            final.append(row)
+        final_df = pd.DataFrame(final)
+        final_df.drop_duplicates(subset=["Comments"], inplace=True)
+        final_df.to_csv(file, index=False)
+        print(f"Processed file: {file} | Left Rows: {final_df.shape[0]}")
 
-def word_threshold_filter(df: pd.DataFrame, min_threshold: int, max_threshold: int = 0):
-  length = df["Comment"].str.split().str.len()
-  filtered = df[ ((length<=max_threshold) | (max_threshold==0)) & (length>min_threshold) ]
-  return filtered
+if __name__ == "__main__":
+    main()

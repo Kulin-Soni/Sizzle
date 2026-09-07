@@ -1,63 +1,43 @@
-import { ConnectionStates } from "../types";
+// storage.ts
+import browser, { Storage } from "webextension-polyfill";
 import { z } from "zod";
+import { ConnectionStates } from "../types";
 
-const LocalStorageData = z.object({
+const LocalStorageSchema = z.object({
   sizzle_enabled: z.boolean(),
   sizzle_threshold: z.number(),
   onboarding: z.boolean(),
   connection_state: z.enum(ConnectionStates),
-  connection_progress: z.number()
+  connection_progress: z.number(),
 });
 
-export type LocalStorageProps = Partial<z.infer<typeof LocalStorageData>>;
+export type LocalStorageProps = Partial<z.infer<typeof LocalStorageSchema>>;
 export type LocalStorageKeys = keyof LocalStorageProps;
 
+const SessionStorageSchema = z.object({});
 
-const SessionStorageData = z.object({});
-
-export type SessionStorageProps = Partial<z.infer<typeof SessionStorageData>>;
+export type SessionStorageProps = Partial<z.infer<typeof SessionStorageSchema>>;
 export type SessionStorageKeys = keyof SessionStorageProps;
 
+class StorageArea<Props extends Record<string, unknown>> {
+  constructor(private readonly area: Storage.StorageArea) {}
 
-class LocalStorage {
-  private constructor() {}
-
-  static async get(items: LocalStorageProps | LocalStorageKeys[]) {
-    const data: LocalStorageProps = await chrome.storage.local.get(items);
-    return data;
+  async get(items: Partial<Props> | (keyof Props)[]): Promise<Partial<Props>> {
+    return (await this.area.get(items as string[] | Record<string, unknown>)) as Partial<Props>;
   }
 
-  static async set(items: LocalStorageProps) {
-    await chrome.storage.local.set(items);
+  async set(items: Partial<Props>): Promise<void> {
+    await this.area.set(items);
   }
 
-  static async clear() {
-    await chrome.storage.local.clear();
+  async remove(items: (keyof Props)[]): Promise<void> {
+    await this.area.remove(items as string[]);
   }
 
-  static async remove(items: LocalStorageKeys[]) {
-    await chrome.storage.local.remove(items);
+  async clear(): Promise<void> {
+    await this.area.clear();
   }
 }
 
-class SessionStorage {
-  private constructor() {}
-
-  static async get(items: SessionStorageProps | SessionStorageKeys[]) {
-    const data: SessionStorageProps = await chrome.storage.session.get(items);
-    return data;
-  }
-
-  static async set(items: SessionStorageProps) {
-    await chrome.storage.session.set(items);
-  }
-
-  static async clear() {
-    await chrome.storage.session.clear();
-  }
-
-  static async remove(items: LocalStorageKeys[]) {
-    await chrome.storage.session.remove(items);
-  }
-}
-export { LocalStorage, SessionStorage };
+export const LocalStorage = new StorageArea<z.infer<typeof LocalStorageSchema>>(browser.storage.local);
+export const SessionStorage = new StorageArea<z.infer<typeof SessionStorageSchema>>(browser.storage.session);

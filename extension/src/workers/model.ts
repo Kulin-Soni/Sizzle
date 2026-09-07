@@ -7,7 +7,7 @@ import {
 import { LocalStorage } from "../utils/storage";
 import { ConnectionStates } from "../types";
 import modelURL from "./model/weights.json?url";
-import { MODEL_FILE_NAME, WASM_CACHE } from "../utils/constants";
+import { MODEL_FILE_NAME, WASM_CACHE, MODEL_NAME } from "../utils/config";
 import CacheManager from "../utils/cache";
 
 class Model {
@@ -74,7 +74,7 @@ class Model {
 
     this.model = (await pipeline(
       "feature-extraction",
-      "Xenova/all-MiniLM-L6-v2",
+      MODEL_NAME,
       {
         dtype: "q8",
         progress_callback: async (p: ProgressInfo) => {

@@ -6,7 +6,10 @@ import Onboarding from './components/Onboarding'
 import Footer from './components/Footer'
 import { RenderData } from './types'
 import { LocalStorage } from './utils/storage'
-import { MdDivider } from "react-material-web";
+import { Separator } from "@/components/ui/separator"
+
+const MIN_THRESHOLD = 30;
+const MAX_THRESHOLD = 80;
 
 function App({...props}: RenderData) {
   
@@ -27,7 +30,7 @@ function App({...props}: RenderData) {
   }, [boarding]);
 
   return (
-    <div className="w-full h-full bg-[#1f2327] text-white flex flex-col overflow-hidden relative font-sans selection:bg-red-500/30">
+    <div className="dark w-full h-full bg-[#101214] text-white flex flex-col overflow-hidden relative font-sans selection:bg-red-500/30">
       {boarding ? (<Onboarding setBoarding={setBoarding} />) :
         (<>
         <div className="z-10 w-full h-full flex flex-col justify-evenly items-center relative">
@@ -44,7 +47,7 @@ function App({...props}: RenderData) {
             </div>
           </header>
 
-          <MdDivider className='w-full opacity-50 px-5' />
+          <Separator className='w-full opacity-50 px-5' />
 
           {/* Controls: Slider */}
           <div className="w-full flex flex-col items-center gap-2 min-h-0 relative">
@@ -54,14 +57,14 @@ function App({...props}: RenderData) {
               </label>
               <span className={cn(`text-sm font-google_semi font-bold tabular-nums tracking-wide transition-colors`,
                 (!isEnabled) ? "text-zinc-800" :
-                  (qualityThreshold >= 30 && qualityThreshold <= 80)
+                  (qualityThreshold >= MIN_THRESHOLD && qualityThreshold <= MAX_THRESHOLD)
                     ? 'text-emerald-500'
-                    : 'text-(--theme)')}
+                    : 'text-red-500')}
               >
                 {qualityThreshold}%
               </span>
             </div>
-            <div className='w-full flex px-2'>
+            <div className='w-[90%] flex px-2'>
               <MetricSlider
                 value={qualityThreshold}
                 onChange={setQualityThreshold}

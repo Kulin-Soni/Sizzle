@@ -1,6 +1,5 @@
 import React from 'react';
-import { MdSwitch } from "react-material-web"
-
+import {Switch} from "@/components/ui/switch"
 
 interface ToggleSwitchProps {
   isOn: boolean;
@@ -9,7 +8,7 @@ interface ToggleSwitchProps {
 
 const ToggleSwitch: React.FC<ToggleSwitchProps> = ({ isOn, onToggle }) => {
   return (
-    <MdSwitch selected={isOn} onChange={onToggle} className='switch'></MdSwitch>
+    <Switch defaultChecked={isOn} onToggle={onToggle} className=''></Switch>
   );
 };
 

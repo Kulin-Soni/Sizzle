@@ -1,174 +1,184 @@
+// youtube.ts
+import browser, { Runtime } from "webextension-polyfill";
 import { Message } from "../types";
 import { LocalStorage } from "../utils/storage";
 
-let enabled: boolean;
-let threshold: number = 60;
+let threshold = 60;
 
 class ClassifierPortConnection {
-  static port: chrome.runtime.Port | null = null;
-  private constructor() {}
+    private static port: Runtime.Port | null = null;
+    private constructor() {}
 
-  private static async init() {
-    if (!this.port) {
-      this.port = chrome.runtime.connect({name: "classifier"});
-      this.port.onDisconnect.addListener(async ()=>{
-        this.port = null;
-      })
+    private static getPort(): Runtime.Port {
+        if (!this.port) {
+            this.port = browser.runtime.connect({ name: "classifier" });
+            this.port.onDisconnect.addListener(() => {
+                this.port = null;
+            });
+        }
+        return this.port;
     }
-  }
 
-  static async receiver(callback: (msg: Message)=>Promise<any> | any) {
-    await this.init();
+    static onMessage(callback: (msg: Message) => void | Promise<void>): void {
+        this.getPort().onMessage.addListener((message) => {
+            void callback(message as Message);
+        });
+    }
 
-    this.port?.onMessage.addListener(async (msg: Message)=>{
-      await callback(msg);
-    })
-  }
-
-  static async send(text: string, id: string) {
-    await this.init();
-
-    this.port?.postMessage({
-      category: "CLASSIFICATION",
-      from: "front",
-      data: { text: text, id: id }
-    } as Message);
-  }
+    static send(text: string, id: string): void {
+        const message: Message = {
+            category: "CLASSIFICATION",
+            from: "front",
+            data: { text, id },
+        };
+        this.getPort().postMessage(message);
+    }
 }
 
+async function waitForElement(
+    parent: Node,
+    selector: string,
+): Promise<Element> {
+    const existing = document.querySelector(selector);
+    if (existing) return existing;
 
-async function waitForElement(parent: Node, selector: string): Promise<Element | void> {
-  return new Promise((resolve) => {
-    const element = document.querySelector(selector);
-    if (element) return resolve(element);
-
-    const observer = new MutationObserver(() => {
-      const element = document.querySelector(selector);
-      if (element) {
-        observer.disconnect();
-        resolve(element);
-      }
+    return new Promise((resolve) => {
+        const observer = new MutationObserver(() => {
+            const element = document.querySelector(selector);
+            if (element) {
+                observer.disconnect();
+                resolve(element);
+            }
+        });
+        observer.observe(parent, { childList: true, subtree: true });
     });
-
-    observer.observe(parent, {
-      childList: true,
-      subtree: true,
-    });
-  });
 }
 
 function extractText(input: string | Element): string {
-  const el =
-    typeof input === "string"
-      ? Object.assign(document.createElement("div"), { innerHTML: input })
-      : input;
+    const el =
+        typeof input === "string"
+            ? Object.assign(document.createElement("div"), { innerHTML: input })
+            : input;
 
-  const walker = document.createTreeWalker(
-    el,
-    NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
-  );
-  let out = "";
-  while (walker.nextNode()) {
-    const n = walker.currentNode;
-    out += n.nodeName === "IMG" ? (n as HTMLImageElement).alt : n.nodeType === Node.TEXT_NODE ? n.textContent : "";
-  }
-  return out.trim();
+    const walker = document.createTreeWalker(
+        el,
+        NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+    );
+    let out = "";
+    while (walker.nextNode()) {
+        const n = walker.currentNode;
+        out +=
+            n.nodeName === "IMG"
+                ? (n as HTMLImageElement).alt
+                : n.nodeType === Node.TEXT_NODE
+                  ? (n.textContent ?? "")
+                  : "";
+    }
+    return out.trim();
 }
 
-function checkValidity() {
-  const re = /^https:\/\/(www\.)?youtube\.com\/(watch\?v=[\w-]+|live\/[\w-]+)([?&].*)?$/;
-  return re.test(document.URL);
+function checkValidity(): boolean {
+    const re =
+        /^https:\/\/(www\.)?youtube\.com\/(watch\?v=[\w-]+|live\/[\w-]+)([?&].*)?$/;
+    return re.test(document.URL);
 }
 
-function cleanGhostRenderers(node: Element) {
-  const ghosts = node.querySelectorAll("ytd-continuation-item-renderer.ytd-item-section-renderer");
-  for (let i = 0; i < ghosts.length - 1; i++) {
-    ghosts[i].remove();
-  }
+function cleanGhostRenderers(node: Element): void {
+    const ghosts = node.querySelectorAll(
+        "ytd-continuation-item-renderer.ytd-item-section-renderer",
+    );
+    ghosts.forEach((ghost, i) => {
+        if (i < ghosts.length - 1) ghost.remove();
+    });
 }
 
-async function getRenderedComments(mutations: MutationRecord[]) {
-  for (const mutation of mutations) {
-    for (const node of mutation.addedNodes) {
-      if (node instanceof Element) {
-        const span = node.querySelector("#comment-container #comment #body #main #expander #content #content-text span");
-        const text = span && extractText(span);
-        if (text && node.matches("ytd-comment-thread-renderer")) {
-          if (node instanceof HTMLElement) node.style.visibility = 'hidden';
-          const uuid = "sizzle" + crypto.randomUUID();
-          node.id = uuid;
-          ClassifierPortConnection.send(text, uuid);
+function getRenderedComments(mutations: MutationRecord[]): void {
+    for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+            if (
+                !(node instanceof Element) ||
+                !node.matches("ytd-comment-thread-renderer")
+            )
+                continue;
+
+            const span = node.querySelector(
+                "#comment-container #comment #body #main #expander #content #content-text span",
+            );
+            const text = span && extractText(span);
+            if (!text) continue;
+
+            if (node instanceof HTMLElement) node.style.visibility = "hidden";
+            const uuid = "sizzle" + crypto.randomUUID();
+            node.id = uuid;
+            ClassifierPortConnection.send(text, uuid);
         }
-      }
     }
-  }
 }
 
-async function interceptComments(msg: Message) {
-  if (msg.category==="CLASSIFICATION" && msg.from==="back") {
+function interceptComments(msg: Message): void {
+    if (msg.category !== "CLASSIFICATION" || msg.from !== "back") return;
+
     const node = document.getElementById(msg.result.id);
-    if (msg.result.result<(threshold/100)) {
-      node?.remove();
+    if (msg.result.result < threshold / 100) {
+        node?.remove();
     } else if (node instanceof HTMLElement) {
-      node.style.visibility = 'visible';
+        node.style.visibility = "visible";
     }
-  }
 }
 
-async function addCommentListener() {
-  const commentsElement = await waitForElement(
-    document,
-    "#below ytd-comments ytd-item-section-renderer #contents"
-  );
-  if (commentsElement) {
-    const observer = new MutationObserver(
-      async (mutations: MutationRecord[]) => {
-        await getRenderedComments(mutations);
+async function addCommentListener(): Promise<MutationObserver | undefined> {
+    const commentsElement = await waitForElement(
+        document,
+        "#below ytd-comments ytd-item-section-renderer #contents",
+    );
+    if (!commentsElement) return;
+
+    const observer = new MutationObserver((mutations) => {
+        getRenderedComments(mutations);
         cleanGhostRenderers(commentsElement);
-      });
+    });
     observer.observe(commentsElement, { childList: true });
     return observer;
-  }
 }
 
-async function addPageListener() {
-  console.log(`Extension loaded with threshold ${threshold/100}!`);
+async function addPageListener(): Promise<void> {
+    console.log(`Extension loaded with threshold ${threshold / 100}!`);
 
-  let previousObserver: MutationObserver | null = null;
-  async function handleUrlChange() {
-    previousObserver?.disconnect();
-    await chrome.runtime.sendMessage({category: "WAKE_UP_CALL", from: "front"} as Message);
-    if (checkValidity()) {
-      const currentObserver = await addCommentListener();
-      if (currentObserver) previousObserver = currentObserver;
+    let previousObserver: MutationObserver | null = null;
+
+    async function handleUrlChange(): Promise<void> {
+        previousObserver?.disconnect();
+        const wakeUp: Message = { category: "WAKE_UP_CALL", from: "front" };
+        await browser.runtime.sendMessage(wakeUp);
+
+        if (checkValidity()) {
+            previousObserver = (await addCommentListener()) ?? null;
+        }
     }
-  }
 
-  const _push = history.pushState.bind(history);
-  const _replace = history.replaceState.bind(history);
-  history.pushState = function (...args) {
-    _push(...args);
-    handleUrlChange();
-  };
-  history.replaceState = function (...args) {
-    _replace(...args);
-    handleUrlChange();
-  };
-  window.addEventListener("yt-navigate-finish", handleUrlChange);
+    (["pushState", "replaceState"] as const).forEach((method) => {
+        const original = history[method].bind(history);
+        history[method] = function (
+            ...args: Parameters<History[typeof method]>
+        ) {
+            original(...args);
+            void handleUrlChange();
+        };
+    });
+    window.addEventListener("yt-navigate-finish", handleUrlChange);
 
-  await handleUrlChange();
+    await handleUrlChange();
 
-  ClassifierPortConnection.receiver(async (msg)=>{
-    await interceptComments(msg);
-  })
+    ClassifierPortConnection.onMessage(interceptComments);
 }
 
 window.addEventListener("load", async () => {
-  const data = await LocalStorage.get({
-    sizzle_enabled: true,
-    sizzle_threshold: 60,
-  }); // already handles when value is not available
-  enabled = data.sizzle_enabled as boolean;
-  threshold = data.sizzle_threshold as number;
-  enabled && await addPageListener();
+    const data = await LocalStorage.get({
+        sizzle_enabled: true,
+        sizzle_threshold: 60,
+    });
+    threshold = data.sizzle_threshold ?? 60;
+    if (data.sizzle_enabled ?? true) {
+        await addPageListener();
+    }
 });

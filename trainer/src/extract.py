@@ -1,110 +1,176 @@
-### 
-# This file is to be used independently. 
-# Do not execute functions from here in other file unless you want your code to blast like watermelon.
-###
+"""
+Re-written using Claude, check diff if you want to see the original.
 
-from googleapiclient.discovery import build
-from pandas import DataFrame
-from typing import List, Dict
-from dotenv import dotenv_values
-from pathlib import Path
-from json_util import load, save
-from time import sleep
-from os import makedirs
-from html import unescape
-from re import sub
+    python extract_youtube_comments.py --new [YOUTUBE_VIDEO_ID] --sort relevance
+    python extract_youtube_comments.py --cache --sort time --save_cache
+"""
+
 from argparse import ArgumentParser
+from html import unescape
+from json import JSONDecodeError, dump, load
+from os import makedirs
+from pathlib import Path
+from re import sub
+from time import sleep
+from typing import List, Optional, Tuple
+from logging import Logger, basicConfig
 
-# Argument parsing
-parser = ArgumentParser()
-g = parser.add_mutually_exclusive_group(required=True, )
-g.add_argument("--cache", dest="cache", action="store_true")
-g.add_argument("--new", dest="new", metavar="YOUTUBE_VIDEO_ID")
-parser.add_argument("--o", choices=["relevance", "time"], required=True)
-parser.add_argument("--progress", action="store_true", required=False)
+from dotenv import dotenv_values
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+from pandas import DataFrame
+
+basicConfig(level="INFO")
+logger = Logger(__name__)
+
+# CLI arguments
+parser = ArgumentParser(description="Extract YouTube comments to a CSV file.")
+
+source_group = parser.add_mutually_exclusive_group(required=True)
+source_group.add_argument(
+    "--cache",
+    action="store_true",
+    help="Resume extraction using the video ID and page token stored in progress.json.",
+)
+source_group.add_argument(
+    "--new",
+    dest="video_id",
+    metavar="YOUTUBE_VIDEO_ID",
+    help="Start a fresh extraction for the given video ID.",
+)
+
+parser.add_argument(
+    "--sort",
+    choices=["relevance", "time"],
+    required=True,
+    help="Comment ordering to request from the YouTube API.",
+)
+parser.add_argument(
+    "--output",
+    default="output.csv",
+    help="CSV filename (written inside the 'raw' directory). Default: output.csv",
+)
+parser.add_argument(
+    "--save_cache",
+    action="store_true",
+    help="Persist the next page token after every page, so extraction can be resumed with --cache.",
+)
+
 args = parser.parse_args()
 
-# Setting up constants
-PARENT = Path("raw_data")
-DATA_FILE = Path(PARENT / "comments_5.csv")
-TOKEN_FILE = Path(PARENT / "progress_data.json")
-COL_ORDER = ["Video Id", "Comment", "Likes", "Quality"]
-ENV = dotenv_values(".env")
-client = build("youtube", version="v3", developerKey=ENV["DEV_KEY"])
-makedirs(PARENT, exist_ok=True)
 
-# Removes html from text and replaces numeric character references.
-def clean_text(text: str):
-    return unescape(sub(r'<[^>]+>', '', text))
+# Constants / setup
+OUTPUT_DIR = Path("raw")
+OUTPUT_FILE = OUTPUT_DIR / args.output
+PROGRESS_FILE = OUTPUT_DIR / "progress.json"
+CSV_COLUMNS = ["Comments", "Quality"]
+REQUEST_DELAY_SECONDS = 2
 
-# Saves video id and token to token file.
-def save_token(video_id, token):
-    save(TOKEN_FILE, {"VIDEO_ID": video_id, "TOKEN": token})
-        
-# Loads video id and token from token file. 
-def load_token():
+makedirs(OUTPUT_DIR, exist_ok=True)
+
+env = dotenv_values(".env")
+api_key = env.get("DEV_KEY")
+if not api_key:
+    raise SystemExit(
+        "Missing DEV_KEY in .env file. Cannot authenticate with the YouTube API."
+    )
+
+youtube = build("youtube", "v3", developerKey=api_key)
+
+
+# Helpers
+def clean_text(raw_html: str) -> str:
+    return unescape(sub(r"<[^>]+>", "", raw_html))
+
+
+def save_progress(video_id: str, page_token: str):
+    with open(PROGRESS_FILE, "w", encoding="utf-8") as f:
+        dump({"VIDEO_ID": video_id, "TOKEN": page_token}, f)
+
+
+def load_progress() -> Optional[dict]:
     try:
-        return load(TOKEN_FILE)
-    except FileExistsError:
+        with open(PROGRESS_FILE, "r", encoding="utf-8") as f:
+            return load(f)
+    except (FileNotFoundError, JSONDecodeError):
         return None
 
 
-# Gets comments from Google and returns data
-def extract_comments(id: str, nToken):
-    res = (
-        client.commentThreads()
+def fetch_comment_page(
+    video_id: str, page_token: Optional[str]
+) -> Tuple[List[List[str]], Optional[str]]:
+    response = (
+        youtube.commentThreads()
         .list(
             part="snippet",
-            videoId=id,
-            order=args.o,
-            pageToken=nToken,
+            videoId=video_id,
+            order=args.sort,
+            pageToken=page_token,
             maxResults=100,
         )
         .execute()
     )
-    comments = []
-    for item in res["items"]:
 
-        comment = item["snippet"]["topLevelComment"]["snippet"]["textDisplay"]
-        like_count = item["snippet"]["topLevelComment"]["snippet"]["likeCount"]
+    rows = []
+    for item in response["items"]:
+        comment_text = item["snippet"]["topLevelComment"]["snippet"]["textDisplay"]
+        rows.append([clean_text(comment_text), "0"])
 
-        comments.append([id, clean_text(comment), like_count, "0"])
-
-    nToken = res.get("nextPageToken")
-    return (comments, nToken)
+    next_page_token = response.get("nextPageToken")
+    return rows, next_page_token
 
 
-# Writes comments to csv file
-def write_to_csv(file: Path, comments: List[Dict]):
+def write_rows_to_csv(file: Path, rows: List[List[str]]):
     if not file.is_file():
-        col_df = DataFrame(columns=COL_ORDER)
-        col_df.to_csv(file, index=False)
-    df = DataFrame(comments)
-    df.to_csv(file, header=False, index=False, mode="a")
+        DataFrame(columns=CSV_COLUMNS).to_csv(file, index=False)
+
+    DataFrame(rows).to_csv(file, header=False, index=False, mode="a")
 
 
 def main():
-    
-    data: None | Dict = load_token() if args.cache else None
-    nToken = data["TOKEN"] if data else None
-    video_id = data["VIDEO_ID"] if data else args.new
+    if args.cache:
+        progress = load_progress()
+        if not progress:
+            raise SystemExit(
+                "--cache was given but no progress.json was found (or it's corrupted). "
+                "Start a new extraction with --new <VIDEO_ID> instead."
+            )
+        video_id = progress["VIDEO_ID"]
+        page_token = progress["TOKEN"]
+    else:
+        video_id = args.video_id
+        page_token = None
 
-    print("-> Extract Started ...")
+    logger.info("Extract started for video '%s' (sort=%s) ...", video_id, args.sort)
 
-    while True:
-        comments, nToken = extract_comments(video_id, nToken)
-        write_to_csv(DATA_FILE, comments)
+    page_count = 0
+    try:
+        while True:
+            try:
+                rows, page_token = fetch_comment_page(video_id, page_token)
+            except HttpError:
+                logger.info("YouTube API error, stopping extraction.", exc_info=True)
+                break
 
-        if nToken and (args.progress or args.cache):
-            save_token(video_id=video_id, token=nToken)
-        else:
-            print("-> Next Page Token Unavailable")
-            break
-        sleep(2)
+            write_rows_to_csv(OUTPUT_FILE, rows)
+            page_count += 1
+            logger.info("Page %s: wrote %s comments", page_count, len(rows))
 
-    client.close()
+            if page_token and args.save_cache:
+                save_progress(video_id, page_token)
+
+            if not page_token:
+                logger.info("No more pages available.")
+                break
+
+            sleep(REQUEST_DELAY_SECONDS)
+    except KeyboardInterrupt:
+        if page_token and args.save_cache:
+            save_progress(video_id, page_token)
+    finally:
+        youtube.close()
 
 
 if __name__ == "__main__":
     main()
-    print("-> Extract Done!")
+    logger.info("Extract Done!")

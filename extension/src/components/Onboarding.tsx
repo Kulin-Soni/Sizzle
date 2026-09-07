@@ -1,47 +1,66 @@
 import React, { Dispatch, SetStateAction, useEffect, useState } from 'react'
 import { Actions, ConnectionStates, Message } from '../types';
 import { LocalStorage } from '../utils/storage';
+import browser, { Runtime } from "webextension-polyfill"
 
 interface OnboardingProps {
   setBoarding: Dispatch<SetStateAction<boolean>>
 }
+
+type MessageResponse = { success: boolean };
+
 const Onboarding: React.FC<OnboardingProps> = ({ setBoarding }) => {
   const [buttonLabel, setButtonLabel] = useState<string>("0%");
   const [buttonDisabled, setButtonDisabled] = useState<boolean>(true);
 
-  const setup = async () => {
+  const setup = async (): Promise<void> => {
     setButtonDisabled(true);
-    await chrome.runtime.sendMessage({ category: "SETUP", from: "front", action: Actions.START } as Message);
+    const outgoing: Message = { category: "SETUP", from: "front", action: Actions.START };
+    await browser.runtime.sendMessage(outgoing);
   };
 
   useEffect(() => {
-    // Add message listener
-    const listener = async (msg: Message) => {
-      if (msg.category === "SETUP" && msg.from === "back") {
-        if (msg.action === Actions.STOP) {
-          await LocalStorage.set({ connection_state: ConnectionStates.COMPLETED });
-          setBoarding(false);
+    const listener: Runtime.OnMessageListener = (message: unknown, ..._: unknown[]) => {
+      const msg = message as Message;
 
-        } else if (msg.action === Actions.PROGRESS) {
-          setButtonLabel(`${Math.round(msg.data.progress)}%`);
-          if (!buttonDisabled) setButtonDisabled(true);
+      return (async (): Promise<MessageResponse> => {
+        if (msg.category === "SETUP" && msg.from === "back") {
+          if (msg.action === Actions.STOP) {
+            await LocalStorage.set({ connection_state: ConnectionStates.COMPLETED });
+            setBoarding(false);
+
+          } else if (msg.action === Actions.PROGRESS) {
+            setButtonLabel(`${Math.round(msg.data.progress)}%`);
+            if (!buttonDisabled) setButtonDisabled(true);
+          }
         }
-      }
-    }
-    chrome.runtime.onMessage.addListener(async (msg) => { await listener(msg); return { success: true }; });
+        return { success: true };
+      })();
+    };
 
-    // Check for already existing states
-    LocalStorage.get({ connection_state: ConnectionStates.UNSTARTED, connection_progress: 0 }).then(async (res) => {
-      setButtonDisabled(res.connection_state === ConnectionStates.STARTED);
-      (res.connection_progress) && setButtonLabel(`${Math.round(res.connection_progress)}%`);
-      (res.connection_progress==100) && setBoarding(false);
-      if (res.connection_state !== ConnectionStates.COMPLETED || res.connection_progress !== 100) {
+    browser.runtime.onMessage.addListener(listener);
+
+    LocalStorage.get({
+      connection_state: ConnectionStates.UNSTARTED,
+      connection_progress: 0
+    }).then(async (res) => {
+      const connectionState = res.connection_state ?? ConnectionStates.UNSTARTED;
+      const connectionProgress = res.connection_progress ?? 0;
+
+      setButtonDisabled(connectionState === ConnectionStates.STARTED);
+      if (connectionProgress) {
+        setButtonLabel(`${Math.round(connectionProgress)}%`);
+      }
+      if (connectionProgress === 100) {
+        setBoarding(false);
+      }
+      if (connectionState !== ConnectionStates.COMPLETED || connectionProgress !== 100) {
         await setup();
       }
     });
 
     return () => {
-      chrome.runtime.onMessage.removeListener(listener);
+      browser.runtime.onMessage.removeListener(listener);
     }
   }, [])
 

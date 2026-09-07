@@ -16,14 +16,7 @@ wheels/
 .vscode
 
 # Other files
-regressor.pkl
-regressor.json
-raw_data
-predicted_data
-labeled_data/*
-
-# Test file
-src/test.py
+raw
 
 # Dependency manager
 uv.lock
